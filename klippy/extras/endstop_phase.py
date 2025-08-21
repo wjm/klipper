@@ -6,7 +6,8 @@
 import math, logging
 import stepper
 
-TRINAMIC_DRIVERS = ["tmc2130", "tmc2208", "tmc2209", "tmc2660", "tmc5160"]
+TRINAMIC_DRIVERS = ["tmc2130", "tmc2208", "tmc2209", "tmc2240", "tmc2660",
+    "tmc5160"]
 
 # Calculate the trigger phase of a stepper motor
 class PhaseCalc:
@@ -51,10 +52,11 @@ class PhaseCalc:
 class EndstopPhase:
     def __init__(self, config):
         self.printer = config.get_printer()
-        self.name = config.get_name().split()[1]
+        self.name = " ".join(config.get_name().split()[1:])
         # Obtain step_distance and microsteps from stepper config section
         sconfig = config.getsection(self.name)
-        self.step_dist = stepper.parse_step_distance(sconfig)
+        rotation_dist, steps_per_rotation = stepper.parse_step_distance(sconfig)
+        self.step_dist = rotation_dist / steps_per_rotation
         self.phases = sconfig.getint("microsteps", note_valid=False) * 4
         self.phase_calc = PhaseCalc(self.printer, self.name, self.phases)
         # Register event handlers
@@ -116,7 +118,7 @@ class EndstopPhase:
         return delta * self.step_dist
     def handle_home_rails_end(self, homing_state, rails):
         for rail in rails:
-            stepper = rail.get_steppers()[0]
+            stepper = rail.get_endstops()[0][0].get_steppers()[0]
             if stepper.get_name() == self.name:
                 trig_mcu_pos = homing_state.get_trigger_position(self.name)
                 align = self.align_endstop(rail)
@@ -189,7 +191,6 @@ class EndstopPhases:
     def generate_stats(self, stepper_name, phase_calc):
         phase_history = phase_calc.phase_history
         wph = phase_history + phase_history
-        count = sum(phase_history)
         phases = len(phase_history)
         half_phases = phases // 2
         res = []

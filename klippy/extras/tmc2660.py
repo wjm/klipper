@@ -136,17 +136,26 @@ class TMC2660CurrentHelper:
 
     def _calc_current_bits(self, current, vsense):
         vref = 0.165 if vsense else 0.310
-        cs = int(32 * current * self.sense_resistor * math.sqrt(2.) / vref
-                 - 1. + .5)
+        sr = self.sense_resistor
+        cs = int(32. * sr * current * math.sqrt(2.) / vref + .5) - 1
         return max(0, min(31, cs))
 
+    def _calc_current_from_bits(self, cs, vsense):
+        vref = 0.165 if vsense else 0.310
+        return (cs + 1) * vref / (32. * self.sense_resistor * math.sqrt(2.))
+
     def _calc_current(self, run_current):
-        vsense = False
-        cs = self._calc_current_bits(run_current, vsense)
-        if cs < 16:
-            vsense = True
-            cs = self._calc_current_bits(run_current, vsense)
-        return vsense, cs
+        vsense = True
+        irun = self._calc_current_bits(run_current, True)
+        if irun == 31:
+            cur = self._calc_current_from_bits(irun, True)
+            if cur < run_current:
+                irun2 = self._calc_current_bits(run_current, False)
+                cur2 = self._calc_current_from_bits(irun2, False)
+                if abs(run_current - cur2) < abs(run_current - cur):
+                    vsense = False
+                    irun = irun2
+        return vsense, irun
 
     def _handle_printing(self, print_time):
         print_time -= 0.100 # Schedule slightly before deadline
@@ -189,11 +198,14 @@ class MCU_TMC2660_SPI:
         self.fields = fields
     def get_fields(self):
         return self.fields
-    def get_register(self, reg_name):
+    def get_register_raw(self, reg_name):
         new_rdsel = ReadRegisters.index(reg_name)
         reg = self.name_to_reg["DRVCONF"]
         if self.printer.get_start_args().get('debugoutput') is not None:
-            return 0
+            return {
+                'data': 0,
+                '#receive_time': .0,
+            }
         with self.mutex:
             old_rdsel = self.fields.get_field("rdsel")
             val = self.fields.set_field("rdsel", new_rdsel)
@@ -203,7 +215,12 @@ class MCU_TMC2660_SPI:
                 self.spi.spi_send(msg)
             params = self.spi.spi_transfer(msg)
         pr = bytearray(params['response'])
-        return (pr[0] << 16) | (pr[1] << 8) | pr[2]
+        return {
+            'data': (pr[0] << 16) | (pr[1] << 8) | pr[2],
+            '#receive_time': params['#receive_time'],
+        }
+    def get_register(self, reg_name):
+        return self.get_register_raw(reg_name)['data']
     def set_register(self, reg_name, val, print_time=None):
         minclock = 0
         if print_time is not None:
@@ -212,6 +229,10 @@ class MCU_TMC2660_SPI:
         msg = [((val >> 16) | reg) & 0xff, (val >> 8) & 0xff, val & 0xff]
         with self.mutex:
             self.spi.spi_send(msg, minclock)
+    def get_tmc_frequency(self):
+        return None
+    def get_mcu(self):
+        return self.spi.get_mcu()
 
 
 ######################################################################

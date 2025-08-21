@@ -15,7 +15,7 @@ class Thermistor:
         self.inline_resistor = inline_resistor
         self.c1 = self.c2 = self.c3 = 0.
     def setup_coefficients(self, t1, r1, t2, r2, t3, r3, name=""):
-        # Calculate Steinhart-Hart coefficents from temp measurements.
+        # Calculate Steinhart-Hart coefficients from temp measurements.
         # Arrange samples as 3 linear equations and solve for c1, c2, and c3.
         inv_t1 = 1. / (t1 - KELVIN_TO_CELSIUS)
         inv_t2 = 1. / (t2 - KELVIN_TO_CELSIUS)
@@ -33,13 +33,14 @@ class Thermistor:
                    / (ln3_r12 - ln3_r13 * ln_r12 / ln_r13))
         if self.c3 <= 0.:
             beta = ln_r13 / inv_t13
-            logging.warn("Using thermistor beta %.3f in heater %s", beta, name)
+            logging.warning("Using thermistor beta %.3f in heater %s",
+                            beta, name)
             self.setup_coefficients_beta(t1, r1, beta)
             return
         self.c2 = (inv_t12 - self.c3 * ln3_r12) / ln_r12
         self.c1 = inv_t1 - self.c2 * ln_r1 - self.c3 * ln3_r1
     def setup_coefficients_beta(self, t1, r1, beta):
-        # Calculate equivalent Steinhart-Hart coefficents from beta
+        # Calculate equivalent Steinhart-Hart coefficients from beta
         inv_t1 = 1. / (t1 - KELVIN_TO_CELSIUS)
         ln_r1 = math.log(r1)
         self.c3 = 0.
@@ -100,32 +101,6 @@ class CustomThermistor:
                        't3': t3, 'r3': r3}
     def create(self, config):
         return PrinterThermistor(config, self.params)
-
-# Default sensors
-Sensors = {
-    "EPCOS 100K B57560G104F": {
-        't1': 25., 'r1': 100000., 't2': 150., 'r2': 1641.9,
-        't3': 250., 'r3': 226.15 },
-    "ATC Semitec 104GT-2": {
-        't1': 20., 'r1': 126800., 't2': 150., 'r2': 1360.,
-        't3': 300., 'r3': 80.65 },
-    "SliceEngineering 450": {
-        't1': 25., 'r1': 500000., 't2': 200., 'r2': 3734.,
-        't3': 400., 'r3': 240. },
-    "TDK NTCG104LH104JT1": {
-        't1': 25., 'r1': 100000., 't2': 50., 'r2': 31230.,
-        't3': 125., 'r3': 2066. },
-    "NTC 100K beta 3950": { 't1': 25., 'r1': 100000., 'beta': 3950. },
-    "Honeywell 100K 135-104LAG-J01": { 't1': 25., 'r1': 100000., 'beta': 3974.},
-    "NTC 100K MGB18-104F39050L32": { 't1': 25., 'r1': 100000., 'beta': 4100. },
-}
-
-def load_config(config):
-    # Register default thermistor types
-    pheaters = config.get_printer().load_object(config, "heaters")
-    for sensor_type, params in Sensors.items():
-        func = (lambda config, params=params: PrinterThermistor(config, params))
-        pheaters.add_sensor_factory(sensor_type, func)
 
 def load_config_prefix(config):
     thermistor = CustomThermistor(config)

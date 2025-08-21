@@ -13,7 +13,7 @@ class PrinterSysStats:
         self.last_mem_avail = 0
         self.mem_file = None
         try:
-            self.mem_file = open("/proc/meminfo", "rb")
+            self.mem_file = open("/proc/meminfo", "r")
         except:
             pass
         printer.register_event_handler("klippy:disconnect", self._disconnect)
@@ -65,8 +65,8 @@ class PrinterStats:
     def generate_stats(self, eventtime):
         stats = [cb(eventtime) for cb in self.stats_cb]
         if max([s[0] for s in stats]):
-            logging.info("Stats %.1f: %s", eventtime,
-                         ' '.join([s[1] for s in stats]))
+            stats_str = ' '.join([s[1] for s in stats if s[1]])
+            logging.info("Stats %.1f: %s", eventtime, stats_str)
         return eventtime + 1.
 
 def load_config(config):
